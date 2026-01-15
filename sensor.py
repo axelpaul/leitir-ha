@@ -48,16 +48,7 @@ async def async_setup_entry(
     ]
 
     registry = er.async_get(hass)
-    prefix = f"{entry.entry_id}_loan_"
-    known_loan_ids: set[str] = set()
-    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
-        if reg_entry.domain != "sensor" or reg_entry.platform != DOMAIN:
-            continue
-        unique_id = reg_entry.unique_id
-        if not unique_id or not unique_id.startswith(prefix):
-            continue
-        known_loan_ids.add(unique_id[len(prefix):])
-
+    loan_entities: dict[str, LeitirLoanSensor] = {}
     added_loan_ids: set[str] = set()
     last_loan_ids: set[str] = set()
 
@@ -67,16 +58,48 @@ async def async_setup_entry(
             return {str(loan_id_value) for loan_id_value in data.keys()}
         return set()
 
+    def _build_loan_entities(loan_ids: set[str]) -> list[LeitirLoanSensor]:
+        new_entities: list[LeitirLoanSensor] = []
+        for loan_id_value in sorted(loan_ids):
+            if loan_id_value in added_loan_ids:
+                continue
+            entity = LeitirLoanSensor(coord, entry.entry_id, loan_id_value)
+            new_entities.append(entity)
+            loan_entities[loan_id_value] = entity
+            added_loan_ids.add(loan_id_value)
+        return new_entities
+
     current_loan_ids = _current_loan_ids()
-    for loan_id_value in sorted(known_loan_ids | current_loan_ids):
-        added_loan_ids.add(loan_id_value)
-        entities.append(LeitirLoanSensor(coord, entry.entry_id, loan_id_value))
+    prefix = f"{entry.entry_id}_loan_"
+    stale_registry_ids: list[str] = []
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain != "sensor" or reg_entry.platform != DOMAIN:
+            continue
+        unique_id = reg_entry.unique_id
+        if not unique_id or not unique_id.startswith(prefix):
+            continue
+        loan_id_value = unique_id[len(prefix):]
+        if loan_id_value in current_loan_ids:
+            continue
+        stale_registry_ids.append(loan_id_value)
+        _LOGGER.debug("Removing stale loan entity %s", reg_entry.entity_id)
+        registry.async_remove(reg_entry.entity_id)
+
+    if stale_registry_ids:
+        _LOGGER.debug(
+            "Removed stale loan ids from registry: %s", sorted(stale_registry_ids)
+        )
+
+    entities.extend(_build_loan_entities(current_loan_ids))
     last_loan_ids = set(current_loan_ids)
 
     async_add_entities(entities)
 
     def _handle_coordinator_update() -> None:
         nonlocal last_loan_ids
+
+        if not coord.last_update_success:
+            return
 
         current_loan_ids = _current_loan_ids()
         added_ids = sorted(current_loan_ids - last_loan_ids)
@@ -86,15 +109,22 @@ async def async_setup_entry(
         if removed_ids:
             _LOGGER.debug("Detected removed loan ids: %s", removed_ids)
 
-        new_entity_ids = current_loan_ids - added_loan_ids
-        if new_entity_ids:
-            async_add_entities(
-                [
-                    LeitirLoanSensor(coord, entry.entry_id, loan_id_value)
-                    for loan_id_value in sorted(new_entity_ids)
-                ]
-            )
-            added_loan_ids.update(new_entity_ids)
+        new_entities = _build_loan_entities(set(added_ids))
+        if new_entities:
+            async_add_entities(new_entities)
+
+        for loan_id_value in removed_ids:
+            added_loan_ids.discard(loan_id_value)
+            entity = loan_entities.pop(loan_id_value, None)
+            if entity is not None:
+                hass.async_create_task(entity.async_remove())
+                if entity.entity_id:
+                    registry.async_remove(entity.entity_id)
+            else:
+                unique_id = f"{entry.entry_id}_loan_{loan_id_value}"
+                entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+                if entity_id:
+                    registry.async_remove(entity_id)
 
         last_loan_ids = current_loan_ids
 
