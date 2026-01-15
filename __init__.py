@@ -15,12 +15,14 @@ from .const import (
     CONF_PASSWORD,
     CONF_REFRESH_HOUR,
     CONF_REFRESH_MINUTE,
+    CONF_REFRESH_TIMES,
     CONF_USERNAME,
     DOMAIN,
     PLATFORMS,
     DEFAULT_REFRESH_HOUR,
     DEFAULT_REFRESH_MINUTE,
     DEFAULT_REFRESH_SECOND,
+    parse_refresh_times,
     SERVICE_RENEW_ALL,
     SERVICE_RENEW_LOAN,
     SERVICE_REFRESH,
@@ -75,21 +77,29 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     await coord.async_config_entry_first_refresh()
 
-    refresh_hour = entry.options.get(CONF_REFRESH_HOUR, DEFAULT_REFRESH_HOUR)
-    refresh_minute = entry.options.get(CONF_REFRESH_MINUTE, DEFAULT_REFRESH_MINUTE)
+    try:
+        refresh_times = parse_refresh_times(entry.options.get(CONF_REFRESH_TIMES))
+    except ValueError:
+        _LOGGER.warning("Invalid refresh schedule for %s", entry.entry_id)
+        refresh_times = []
+    if not refresh_times:
+        refresh_hour = entry.options.get(CONF_REFRESH_HOUR, DEFAULT_REFRESH_HOUR)
+        refresh_minute = entry.options.get(CONF_REFRESH_MINUTE, DEFAULT_REFRESH_MINUTE)
+        refresh_times = [(refresh_hour, refresh_minute)]
 
     async def _daily_refresh(now) -> None:
         await coord.async_request_refresh()
 
-    entry.async_on_unload(
-        async_track_time_change(
-            hass,
-            _daily_refresh,
-            hour=refresh_hour,
-            minute=refresh_minute,
-            second=DEFAULT_REFRESH_SECOND,
+    for refresh_hour, refresh_minute in refresh_times:
+        entry.async_on_unload(
+            async_track_time_change(
+                hass,
+                _daily_refresh,
+                hour=refresh_hour,
+                minute=refresh_minute,
+                second=DEFAULT_REFRESH_SECOND,
+            )
         )
-    )
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     return True
 

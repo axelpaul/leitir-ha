@@ -9,8 +9,9 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
+from homeassistant.util import slugify
 
-from .const import DOMAIN
+from .const import CONF_ACCOUNT_NAME, DOMAIN
 from .coordinator import LeitirCoordinator
 from .loan import (
     loan_author,
@@ -41,6 +42,8 @@ async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ):
     coord: LeitirCoordinator = hass.data[DOMAIN][entry.entry_id]
+    account_label = entry.data.get(CONF_ACCOUNT_NAME) or entry.title or entry.entry_id
+    account_slug = slugify(account_label) or entry.entry_id
     entities = [
         LeitirSummarySensor(coord, entry.entry_id),
         LeitirRenewableCountSensor(coord, entry.entry_id),
@@ -51,6 +54,41 @@ async def async_setup_entry(
     loan_entities: dict[str, LeitirLoanSensor] = {}
     added_loan_ids: set[str] = set()
     last_loan_ids: set[str] = set()
+
+    def _desired_object_id(loan_id_value: str) -> str:
+        return f"{account_slug}_loan_{loan_id_value}"
+
+    def _desired_entity_id(loan_id_value: str) -> str:
+        return f"sensor.{_desired_object_id(loan_id_value)}"
+
+    def _sync_entity_id(loan_id_value: str) -> str | None:
+        unique_id = f"{entry.entry_id}_loan_{loan_id_value}"
+        desired_entity_id = _desired_entity_id(loan_id_value)
+        existing_entity_id = registry.async_get_entity_id("sensor", DOMAIN, unique_id)
+        if existing_entity_id:
+            if existing_entity_id == desired_entity_id:
+                return existing_entity_id
+            existing_entry = registry.async_get(desired_entity_id)
+            if existing_entry and existing_entry.entity_id != existing_entity_id:
+                _LOGGER.warning(
+                    "Entity id %s already in use; keeping %s",
+                    desired_entity_id,
+                    existing_entity_id,
+                )
+                return existing_entity_id
+            _LOGGER.debug(
+                "Renaming loan entity %s to %s", existing_entity_id, desired_entity_id
+            )
+            registry.async_update_entity(existing_entity_id, new_entity_id=desired_entity_id)
+            return desired_entity_id
+        existing_entry = registry.async_get(desired_entity_id)
+        if existing_entry and existing_entry.unique_id != unique_id:
+            _LOGGER.warning(
+                "Entity id %s already in use; keeping generated id",
+                desired_entity_id,
+            )
+            return None
+        return desired_entity_id
 
     def _current_loan_ids() -> set[str]:
         data = coord.data or {}
@@ -63,7 +101,10 @@ async def async_setup_entry(
         for loan_id_value in sorted(loan_ids):
             if loan_id_value in added_loan_ids:
                 continue
-            entity = LeitirLoanSensor(coord, entry.entry_id, loan_id_value)
+            entity = LeitirLoanSensor(coord, entry.entry_id, loan_id_value, account_slug)
+            entity_id = _sync_entity_id(loan_id_value)
+            if entity_id:
+                entity.entity_id = entity_id
             new_entities.append(entity)
             loan_entities[loan_id_value] = entity
             added_loan_ids.add(loan_id_value)
@@ -187,12 +228,18 @@ class LeitirNextDueDateSensor(CoordinatorEntity, SensorEntity):
 
 
 class LeitirLoanSensor(CoordinatorEntity, SensorEntity):
-    def __init__(self, coord: LeitirCoordinator, entry_id: str, loan_id: str):
+    def __init__(
+        self,
+        coord: LeitirCoordinator,
+        entry_id: str,
+        loan_id: str,
+        account_slug: str,
+    ):
         super().__init__(coord)
         self._loan_id = loan_id
         self._attr_unique_id = f"{entry_id}_loan_{loan_id}"
         self._attr_name = f"{coord.account_name} Loan {loan_id}"
-        self._attr_suggested_object_id = f"{coord.account_name}_loan_{loan_id}"
+        self._attr_suggested_object_id = f"{account_slug}_loan_{loan_id}"
 
     def _loan(self):
         data = self.coordinator.data or {}

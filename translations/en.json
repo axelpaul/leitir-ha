@@ -15,12 +15,14 @@
     }
   },
   "options": {
+    "error": {
+      "invalid_refresh_times": "Invalid refresh times. Use HH:MM, comma-separated."
+    },
     "step": {
       "init": {
         "title": "Leitir options",
         "data": {
-          "refresh_hour": "Daily refresh hour (0-23)",
-          "refresh_minute": "Daily refresh minute (0-59)"
+          "refresh_times": "Daily refresh times (HH:MM, comma-separated)"
         }
       }
     }

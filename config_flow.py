@@ -11,10 +11,12 @@ from .const import (
     CONF_PASSWORD,
     CONF_REFRESH_HOUR,
     CONF_REFRESH_MINUTE,
+    CONF_REFRESH_TIMES,
     CONF_USERNAME,
     DEFAULT_REFRESH_HOUR,
     DEFAULT_REFRESH_MINUTE,
     DOMAIN,
+    normalize_refresh_times,
 )
 
 
@@ -55,24 +57,44 @@ class LeitirOptionsFlowHandler(config_entries.OptionsFlow):
     def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
         self.config_entry = config_entry
 
-    async def async_step_init(self, user_input=None):
-        if user_input is not None:
-            return self.async_create_entry(title="", data=user_input)
+    def _default_refresh_times(self) -> str:
+        try:
+            times = normalize_refresh_times(
+                self.config_entry.options.get(CONF_REFRESH_TIMES)
+            )
+        except ValueError:
+            times = []
+        if not times:
+            refresh_hour = self.config_entry.options.get(
+                CONF_REFRESH_HOUR, DEFAULT_REFRESH_HOUR
+            )
+            refresh_minute = self.config_entry.options.get(
+                CONF_REFRESH_MINUTE, DEFAULT_REFRESH_MINUTE
+            )
+            times = [f"{refresh_hour:02d}:{refresh_minute:02d}"]
+        return ", ".join(times)
 
-        refresh_hour = self.config_entry.options.get(
-            CONF_REFRESH_HOUR, DEFAULT_REFRESH_HOUR
-        )
-        refresh_minute = self.config_entry.options.get(
-            CONF_REFRESH_MINUTE, DEFAULT_REFRESH_MINUTE
-        )
+    async def async_step_init(self, user_input=None):
+        errors = {}
+        if user_input is not None:
+            try:
+                times = normalize_refresh_times(
+                    user_input.get(CONF_REFRESH_TIMES, "")
+                )
+                if not times:
+                    raise ValueError("empty times")
+                user_input[CONF_REFRESH_TIMES] = times
+            except ValueError:
+                errors["base"] = "invalid_refresh_times"
+            else:
+                return self.async_create_entry(title="", data=user_input)
+
+        refresh_times = self._default_refresh_times()
         schema = vol.Schema(
             {
-                vol.Required(CONF_REFRESH_HOUR, default=refresh_hour): vol.All(
-                    vol.Coerce(int), vol.Range(min=0, max=23)
-                ),
-                vol.Required(CONF_REFRESH_MINUTE, default=refresh_minute): vol.All(
-                    vol.Coerce(int), vol.Range(min=0, max=59)
-                ),
+                vol.Required(CONF_REFRESH_TIMES, default=refresh_times): str,
             }
         )
-        return self.async_show_form(step_id="init", data_schema=schema)
+        return self.async_show_form(
+            step_id="init", data_schema=schema, errors=errors
+        )
