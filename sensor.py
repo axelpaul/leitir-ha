@@ -6,6 +6,7 @@ from datetime import date, datetime
 from homeassistant.components.sensor import SensorDeviceClass, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -26,6 +27,7 @@ from .loan import (
 
 _LOGGER = logging.getLogger(__name__)
 
+
 def _parse_yyyymmdd(value: str | None) -> date | None:
     if not value:
         return None
@@ -45,6 +47,17 @@ async def async_setup_entry(
         LeitirNextDueDateSensor(coord, entry.entry_id),
     ]
 
+    registry = er.async_get(hass)
+    prefix = f"{entry.entry_id}_loan_"
+    known_loan_ids: set[str] = set()
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain != "sensor" or reg_entry.platform != DOMAIN:
+            continue
+        unique_id = reg_entry.unique_id
+        if not unique_id or not unique_id.startswith(prefix):
+            continue
+        known_loan_ids.add(unique_id[len(prefix):])
+
     added_loan_ids: set[str] = set()
     last_loan_ids: set[str] = set()
 
@@ -54,10 +67,11 @@ async def async_setup_entry(
             return {str(loan_id_value) for loan_id_value in data.keys()}
         return set()
 
-    for loan_id_value in _current_loan_ids():
+    current_loan_ids = _current_loan_ids()
+    for loan_id_value in sorted(known_loan_ids | current_loan_ids):
         added_loan_ids.add(loan_id_value)
         entities.append(LeitirLoanSensor(coord, entry.entry_id, loan_id_value))
-    last_loan_ids = set(added_loan_ids)
+    last_loan_ids = set(current_loan_ids)
 
     async_add_entities(entities)
 

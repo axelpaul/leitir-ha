@@ -7,6 +7,7 @@ import voluptuous as vol
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.helpers import config_validation as cv
+from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.event import async_track_time_change
 
 from .const import (
@@ -65,6 +66,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entry.data[CONF_ACCOUNT_NAME],
     )
     hass.data[DOMAIN][entry.entry_id] = coord
+
+    registry = er.async_get(hass)
+    for reg_entry in er.async_entries_for_config_entry(registry, entry.entry_id):
+        if reg_entry.domain == "binary_sensor" and reg_entry.platform == DOMAIN:
+            _LOGGER.debug("Removing legacy binary sensor entity %s", reg_entry.entity_id)
+            registry.async_remove(reg_entry.entity_id)
+
     await coord.async_config_entry_first_refresh()
 
     refresh_hour = entry.options.get(CONF_REFRESH_HOUR, DEFAULT_REFRESH_HOUR)
