@@ -1,0 +1,16 @@
+DOMAIN = "leitir"
+PLATFORMS = ["sensor"]
+
+CONF_ACCOUNT_NAME = "account_name"
+CONF_USERNAME = "username"
+CONF_PASSWORD = "password"
+CONF_REFRESH_HOUR = "refresh_hour"
+CONF_REFRESH_MINUTE = "refresh_minute"
+
+DEFAULT_REFRESH_HOUR = 18
+DEFAULT_REFRESH_MINUTE = 0
+DEFAULT_REFRESH_SECOND = 0
+
+SERVICE_RENEW_LOAN = "renew_loan"
+SERVICE_RENEW_ALL = "renew_all"
+SERVICE_REFRESH = "refresh"

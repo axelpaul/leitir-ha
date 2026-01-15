@@ -1,0 +1,28 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Add Leitir account",
+        "data": {
+          "account_name": "Account name",
+          "username": "Username",
+          "password": "Password"
+        }
+      }
+    },
+    "error": {
+      "auth_failed": "Authentication failed"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Leitir options",
+        "data": {
+          "refresh_hour": "Daily refresh hour (0-23)",
+          "refresh_minute": "Daily refresh minute (0-59)"
+        }
+      }
+    }
+  }
+}

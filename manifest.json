@@ -1,0 +1,7 @@
+{
+  "domain": "leitir",
+  "name": "Leitir (Iceland library loans)",
+  "config_flow": true,
+  "iot_class": "cloud_polling",
+  "version": "0.1.0"
+}

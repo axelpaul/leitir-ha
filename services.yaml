@@ -1,0 +1,13 @@
+renew_loan:
+  name: Renew loan
+  fields:
+    loan_id:
+      required: true
+      selector:
+        text:
+
+renew_all:
+  name: Renew all loans
+
+refresh:
+  name: Refresh loans
