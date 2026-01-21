@@ -1,10 +1,16 @@
 # Leitir - Iceland Library Loans
 
+<img src="images/icon.png" alt="Leitir Logo" width="128" align="right">
+
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg)](https://github.com/hacs/integration)
 [![Validate with HACS](https://github.com/axelpaul/leitir-ha/actions/workflows/validate.yml/badge.svg)](https://github.com/axelpaul/leitir-ha/actions/workflows/validate.yml)
 [![Validate with hassfest](https://github.com/axelpaul/leitir-ha/actions/workflows/hassfest.yml/badge.svg)](https://github.com/axelpaul/leitir-ha/actions/workflows/hassfest.yml)
 
 Home Assistant integration for [Leitir](https://leitir.is), Iceland's public library system. Track your library loans, see due dates, and renew books directly from Home Assistant.
+
+<p align="center">
+  <img src="images/screenshot.png" alt="Leitir Integration Screenshot" width="400">
+</p>
 
 ## Features
 
