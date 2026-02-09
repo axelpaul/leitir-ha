@@ -1,0 +1,344 @@
+# Leitir Library Loans Dashboard Example
+# =======================================
+#
+# This is a complete dashboard example for displaying and managing your library loans.
+#
+# Prerequisites (install via HACS):
+#   - layout-card (https://github.com/thomasloven/lovelace-layout-card)
+#   - mushroom (https://github.com/piitaya/lovelace-mushroom)
+#   - button-card (https://github.com/custom-cards/button-card)
+#   - auto-entities (https://github.com/thomasloven/lovelace-auto-entities)
+#
+# Usage:
+#   1. Replace "user1" with your actual account name (the name you set during setup)
+#   2. Add these cards to your dashboard (each section below is a separate card)
+#
+# Features:
+#   - Summary stats: total loans, books vs games, renewable count, due soon, overdue
+#   - Quick action buttons: renew all, refresh data
+#   - Loan list: sorted by due date with color-coded status bars
+#     - Blue = normal, Orange = due soon, Red = overdue
+#     - Faded accent = not renewable
+#   - Per-loan renew buttons (hidden for non-renewable items)
+
+# =============================================================================
+# CARD 1: Top Bar Stats
+# =============================================================================
+type: custom:layout-card
+layout_type: custom:grid-layout
+layout:
+  grid-template-columns: repeat(4, 1fr)
+  grid-gap: 1px
+  mediaquery:
+    "(max-width: 800px)":
+      grid-template-columns: repeat(2, 1fr)
+cards:
+  - type: custom:mushroom-entity-card
+    entity: sensor.user1_loans
+    name: Total
+    icon: mdi:book-open-page-variant
+    layout: vertical
+    icon_color: blue
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+  - type: custom:mushroom-template-card
+    primary: Books
+    icon: mdi:book
+    layout: vertical
+    secondary: |
+      {{ states.sensor
+         | selectattr('entity_id','match','^sensor\.user1_loan_')
+         | rejectattr('attributes.details.secondarylocationname','eq','Borðspil')
+         | list | length }}
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+  - type: custom:mushroom-template-card
+    primary: Games
+    icon: mdi:dice-multiple
+    layout: vertical
+    secondary: |
+      {{ states.sensor
+         | selectattr('entity_id','match','^sensor\.user1_loan_')
+         | selectattr('attributes.details.secondarylocationname','eq','Borðspil')
+         | list | length }}
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+  - type: custom:mushroom-entity-card
+    entity: sensor.user1_renewable_loans
+    name: Renewable
+    icon: mdi:autorenew
+    layout: vertical
+    icon_color: blue
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+  - type: custom:mushroom-template-card
+    primary: Due soon (7d)
+    icon: mdi:calendar-alert
+    icon_color: orange
+    layout: vertical
+    secondary: |
+      {{ /* unchanged */ }}
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+  - type: custom:mushroom-template-card
+    primary: Overdue
+    icon: mdi:alert-circle
+    icon_color: red
+    layout: vertical
+    secondary: |
+      {{ /* unchanged */ }}
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+  - type: custom:mushroom-template-card
+    primary: Next due
+    icon: mdi:calendar-clock
+    layout: vertical
+    secondary: |
+      {{ states('sensor.user1_next_due')
+         | regex_replace('^([0-9]{4})-([0-9]{2})-([0-9]{2}).*, '\\3/\\2/\\1') }}
+    style: |
+      ha-card {
+        padding: 10px !important;
+      }
+
+# =============================================================================
+# CARD 2: Action Buttons
+# =============================================================================
+type: grid
+columns: 2
+square: false
+cards:
+  - type: custom:button-card
+    name: Renew all
+    icon: mdi:autorenew
+    tap_action:
+      action: call-service
+      service: leitir.renew_all
+    styles:
+      card:
+        - height: 88px
+        - border-radius: 18px
+        - padding: 12px
+      icon:
+        - width: 36px
+      name:
+        - font-size: 14px
+        - font-weight: 500
+  - type: custom:button-card
+    name: Refresh
+    icon: mdi:refresh
+    tap_action:
+      action: call-service
+      service: homeassistant.update_entity
+      target:
+        entity_id:
+          - sensor.user1_loans
+          - sensor.user1_next_due
+    styles:
+      card:
+        - height: 88px
+        - border-radius: 18px
+        - padding: 12px
+      icon:
+        - width: 36px
+      name:
+        - font-size: 14px
+        - font-weight: 500
+
+# =============================================================================
+# CARD 3: Loan List (auto-generated from sensors)
+# =============================================================================
+type: custom:auto-entities
+card:
+  type: grid
+  columns: 1
+  square: false
+card_param: cards
+filter:
+  include:
+    - entity_id: sensor.user1_loan_*
+      options:
+        type: custom:button-card
+        entity: this.entity_id
+        show_icon: true
+        show_name: true
+        show_label: true
+        show_state: false
+        icon: |
+          [[[
+            const sec = entity.attributes?.details?.secondarylocationname || "";
+            return (sec === "Borðspil") ? "mdi:dice-multiple" : "mdi:book-open-page-variant";
+          ]]]
+        name: |
+          [[[
+            return entity.attributes.title_clean
+              || entity.attributes.title
+              || "Untitled";
+          ]]]
+        label: |
+          [[[
+            const status = entity.attributes.status || entity.attributes.details?.loanstatus || "";
+            const raw = (entity.attributes.due_date ?? "").toString();
+
+            // due_date is YYYYMMDD
+            let duePretty = raw;
+            let dueTs = null;
+            if (raw.length === 8) {
+              const y = raw.slice(0,4);
+              const m = raw.slice(4,6);
+              const d = raw.slice(6,8);
+              duePretty = `${d}/${m}/${y}`;
+              dueTs = new Date(`${y}-${m}-${d}T23:59:59`).getTime();
+            }
+
+            // Author: hide if null/empty
+            const authorRaw = (entity.attributes.author ?? "").toString().trim();
+            const author = authorRaw.length ? authorRaw : null;
+
+            // Due hint
+            let dueHint = "";
+            if (dueTs !== null) {
+              const now = Date.now();
+              const dayMs = 24*60*60*1000;
+              const dueSoonDays = 3; // change to 7 if you prefer
+              if (dueTs < now) dueHint = "Overdue";
+              else if (dueTs <= now + dueSoonDays*dayMs) dueHint = "Due soon";
+            }
+
+            const bits = [];
+            if (author) bits.push(author);
+            bits.push(`Due ${duePretty}${dueHint ? " (" + dueHint + ")" : ""}`);
+            if (status) bits.push(status);
+
+            return bits.join(" · ");
+          ]]]
+        tap_action:
+          action: more-info
+        styles:
+          card:
+            - border-radius: 18px
+            - padding: 14px
+            - box-shadow: var(--ha-card-box-shadow)
+            - overflow: hidden
+          grid:
+            - grid-template-areas: "\"accent i n btn\" \"accent i l btn\""
+            - grid-template-columns: 6px 42px 1fr 44px
+            - grid-template-rows: min-content min-content
+            - column-gap: 12px
+            - row-gap: 4px
+            - align-items: center
+          icon:
+            - width: 26px
+            - height: 26px
+          name:
+            - grid-area: "n"
+            - justify-self: start
+            - text-align: left
+            - font-weight: 650
+            - font-size: 16px
+            - line-height: 1.25
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          label:
+            - grid-area: l
+            - justify-self: start
+            - text-align: left
+            - font-size: 13px
+            - opacity: 0.8
+            - line-height: 1.25
+            - white-space: nowrap
+            - overflow: hidden
+            - text-overflow: ellipsis
+          custom_fields:
+            accent:
+              - grid-area: accent
+              - height: 100%
+              - width: 6px
+            btn:
+              - grid-area: btn
+              - display: flex
+              - justify-content: center
+              - align-items: center
+        custom_fields:
+          accent: |
+            [[[
+              const raw = (entity.attributes.due_date ?? "").toString();
+
+              const renewable = entity.attributes.renewable === true || entity.attributes.renewable === "Y";
+
+              let dueTs = null;
+              if (raw.length === 8) {
+                const y = raw.slice(0,4);
+                const m = raw.slice(4,6);
+                const d = raw.slice(6,8);
+                dueTs = new Date(`${y}-${m}-${d}T23:59:59`).getTime();
+              }
+
+              const now = Date.now();
+              const dayMs = 24 * 60 * 60 * 1000;
+              const dueSoonDays = 3;
+              const dueSoonTs = now + (dueSoonDays * dayMs);
+
+              let color = "var(--primary-color)";
+              if (dueTs !== null) {
+                if (dueTs < now) color = "var(--error-color)";
+                else if (dueTs <= dueSoonTs) color = "var(--warning-color)";
+              }
+
+              const opacity = renewable ? 1.0 : 0.45;
+              return `<div style="background:${color};opacity:${opacity};height:100%;width:100%;"></div>`;
+            ]]]
+          btn:
+            card:
+              type: custom:button-card
+              icon: mdi:autorenew
+              show_name: false
+              show_label: false
+              show_state: false
+              size: 20px
+              tap_action:
+                action: call-service
+                service: leitir.renew_loan
+                data:
+                  loan_id: |
+                    [[[
+                      return entity.attributes.loan_id || entity.attributes.details?.loanid;
+                    ]]]
+              styles:
+                card:
+                  - border-radius: 14px
+                  - height: 36px
+                  - width: 36px
+                  - padding: 0
+                  - box-shadow: none
+                  - background: rgba(var(--rgb-primary-text-color), 0.06)
+        state:
+          - operator: template
+            value: |
+              [[[
+                const renewable = entity.attributes.renewable === true || entity.attributes.renewable === "Y";
+                return !renewable;
+              ]]]
+            styles:
+              card:
+                - opacity: 0.7
+              custom_fields:
+                btn:
+                  - display: none
+sort:
+  method: attribute
+  attribute: due_date
+  ignore_case: true

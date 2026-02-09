@@ -111,6 +111,20 @@ automation:
           entry_id: "{{ config_entry_id('sensor.leitir_myaccount_loans') }}"
 ```
 
+## Dashboard Example
+
+A complete Lovelace dashboard example is available in [`examples/dashboard.yaml`](examples/dashboard.yaml). It includes:
+
+- Summary cards showing total loans, books vs games, renewable count, due soon, and overdue items
+- Quick action buttons for renewing all loans and refreshing data
+- Auto-generated loan list sorted by due date with color-coded status indicators
+
+**Required custom cards** (available via HACS):
+- [layout-card](https://github.com/thomasloven/lovelace-layout-card)
+- [mushroom](https://github.com/piitaya/lovelace-mushroom)
+- [button-card](https://github.com/custom-cards/button-card)
+- [auto-entities](https://github.com/thomasloven/lovelace-auto-entities)
+
 ## Support
 
 If you encounter issues, please [open an issue](https://github.com/axelpaul/leitir-ha/issues) on GitHub.
