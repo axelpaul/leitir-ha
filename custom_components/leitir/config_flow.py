@@ -25,7 +25,7 @@ class LeitirConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     @staticmethod
     def async_get_options_flow(config_entry: config_entries.ConfigEntry):
-        return LeitirOptionsFlowHandler(config_entry)
+        return LeitirOptionsFlowHandler()
 
     async def async_step_user(self, user_input=None):
         errors = {}
@@ -54,9 +54,6 @@ class LeitirConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
 
 class LeitirOptionsFlowHandler(config_entries.OptionsFlow):
-    def __init__(self, config_entry: config_entries.ConfigEntry) -> None:
-        self.config_entry = config_entry
-
     def _default_refresh_times(self) -> str:
         try:
             times = normalize_refresh_times(
